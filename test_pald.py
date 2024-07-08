@@ -1,7 +1,6 @@
 import pytest
 import numpy as np
 from PALD import PALD
-import networkx as nx
 
 @pytest.fixture
 def setup_data():
