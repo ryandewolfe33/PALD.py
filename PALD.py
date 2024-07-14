@@ -7,19 +7,18 @@ from itertools import product
 def pald(D):
     n = D.shape[0]
     C = np.zeros_like(D)
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                continue
-            Uij = set()
-            for k in range(n):
-                if D[k, i] <= D[i,j] or D[k, j] <= D[i,j]:
-                    Uij.add(k)
-            for l in Uij:
-                if D[l, i] < D[l,j]:
-                    C[i, l] += 1/len(Uij)
-                if D[l, i] == D[l, j]:
-                    C[i, l] += 1/(2*len(Uij))
+    for i, j in product(range(n), range(n)):
+        if i == j:
+            continue
+        Uij = set()
+        for k in range(n):
+            if D[k, i] <= D[i,j] or D[k, j] <= D[i,j]:
+                Uij.add(k)
+        for l in Uij:
+            if D[l, i] < D[l,j]:
+                C[i, l] += 1/len(Uij)
+            if D[l, i] == D[l, j]:
+                C[i, l] += 1/(2*len(Uij))
     C = C/(n-1)
     return C
 
@@ -27,24 +26,23 @@ def pald(D):
 """
 Normalize a numpy array to sum to 1
 Assumed non-negative
-taken from https://stackoverflow.com/questions/21030391/how-to-normalize-a-numpy-array-to-a-unit-vector
 """
-def normalized(a, axis=-1, order=2):
-    l2 = np.atleast_1d(np.linalg.norm(a, order, axis))
-    l2[l2==0] = 1
-    return a / np.expand_dims(l2, axis)
+def normalized(x):
+    return x / np.sum(x)
 
 
 """
 Get array of cluster ids, index is node_id, value is cluster_id
-G is assumed to have integer nodes with no gaps
+If G is not 0-n indexed must pass node_ids which is a dict node->index
 """
-def cluster_from_graph(G):
+def cluster_from_graph(G, node_ids=None):
     components = nx.connected_components(G)  # an iterator of sets
     clusters = np.full(len(G.nodes), -1) # an array idx = id, value = cluster_id, -1 for outlier
     i = 0
     for component in components:
         for node_id in component:
+            if node_ids:
+                node_id = node_ids[node_id]
             clusters[node_id] = i
         i += 1
     return clusters
@@ -111,6 +109,7 @@ class GPALD:
 
 
     def fit(self, G):
+        self.G = G
         n = G.number_of_nodes()
         nodes = list(G.nodes)
         self.node_ids = {node: id for node, id in zip(nodes, range(n))}
@@ -118,30 +117,49 @@ class GPALD:
         D = shortest_path_dissimilarity(G, self.node_ids)
         C = pald(D)
 
-        neighbourhood_cohesion = np.empty_like(D)
+        neighbourhood_cohesion = np.zeros_like(D)
         for i, j in product(range(n), range(n)):
-            wjt = normalized(np.delete(C[j, :], i))
-            Cij = np.delete(C[i, :], i)
-            neighbourhood_cohesion[i,j] = np.sum(wjt * Cij)
+            wjt = np.delete(normalized(C[j, :]), i)
+            Cit = np.delete(C[i, :], i)
+            neighbourhood_cohesion[i,j] = np.dot(wjt, Cit)
+
+            wit = np.delete(normalized(C[i, :]), j)
+            Cjt = np.delete(C[j, :], j)
+            neighbourhood_cohesion[j,i] = np.dot(wit, Cjt)
  
         dissipation = C - neighbourhood_cohesion
-
-        Dii = np.tile(np.diagonal(dissipation), (n, 1))
-        Djj = np.tile(np.diagonal(dissipation), (n, 1)).transpose()
+        Dii = np.tile(np.diagonal(dissipation), (n, 1)).transpose()
+        Djj = np.tile(np.diagonal(dissipation), (n, 1))
 
         self.relative_dissipation = dissipation - (Dii + Djj)/2
+
+        # Relative dissipation only exists for edges in G. Set other values to 0
+        for i, j in product(range(n), range(n)):
+            if (nodes[i], nodes[j]) not in G.edges and (nodes[j], nodes[i]) not in G.edges:    
+                self.relative_dissipation[i,j] = self.relative_dissipation[j,i] = 0
+
         self.total_relative_dissipation = self.relative_dissipation + self.relative_dissipation.transpose()
 
 
     def predict(self):
-        adjacency_matrix = np.where(self.total_relative_dissipation < 0, self.total_relative_dissipation, 0)
-        cluster_graph = nx.from_numpy_array(np.abs(adjacency_matrix))
-        clusters = cluster_from_graph(cluster_graph)
+        self.cluster_graph = nx.Graph()
+        self.cluster_graph.add_nodes_from(self.G.nodes)
 
-        out = dict()
-        for node, id in self.node_ids.items():
-            out[node] = clusters[id]
-        return out
+        nodes = {id:node for node, id in self.node_ids.items()}  # Reverse node_ids dict
+
+        for i,j in zip(*np.nonzero(self.total_relative_dissipation)):
+            # Only once per pair
+            if i < j:
+                continue
+            if self.total_relative_dissipation[i,j] >= 0:
+                continue
+            node_i = nodes[i]
+            node_j = nodes[j]
+            self.cluster_graph.add_edge(node_i, node_j, weight=self.total_relative_dissipation[i,j])
+
+        self.clusters = cluster_from_graph(self.cluster_graph, self.node_ids)
+        self.predict = {node: self.clusters[id] for node, id in self.node_ids.items()}
+        return self.predict
 
 
     def fit_predict(self, G):
