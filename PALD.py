@@ -1,24 +1,22 @@
 import numpy as np
 import networkx as nx
-from itertools import product
+from itertools import product, combinations
+from tqdm import tqdm
 
 
 # Algorithm taken from https://www.pnas.org/doi/suppl/10.1073/pnas.2003634119#supplementary-materials suplementary information
 def pald(D):
     n = D.shape[0]
     C = np.zeros_like(D)
-    for i, j in product(range(n), range(n)):
-        if i == j:
-            continue
-        Uij = set()
-        for k in range(n):
-            if D[k, i] <= D[i,j] or D[k, j] <= D[i,j]:
-                Uij.add(k)
-        for l in Uij:
-            if D[l, i] < D[l,j]:
-                C[i, l] += 1/len(Uij)
-            if D[l, i] == D[l, j]:
-                C[i, l] += 1/(2*len(Uij))
+    with tqdm(total=n*(n-1)/2) as pbar:
+        for i, j in tqdm(combinations(range(n), 2)):
+            di = D[:, i]
+            dj = D[:, j]
+            uij = np.bitwise_or(di <= D[j,i], dj <= D[i,j])
+            wi = (di[uij] < dj[uij]) + (di[uij] == dj[uij])/2
+            C[i, uij] += wi/np.sum(uij)
+            C[j, uij] += (1-wi)/np.sum(uij)
+            pbar.update()
     C = C/(n-1)
     return C
 
