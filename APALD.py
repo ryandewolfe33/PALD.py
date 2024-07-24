@@ -3,8 +3,8 @@ import numpy as np
 import pynndescent
 import igraph as ig
 import leidenalg as la
-from tqdm import tqdm
 
+from itertools import product
 
 """
 The approximate local pald idea
@@ -34,25 +34,24 @@ class APALD:
     """
     def fit(self, data):
         self.index = pynndescent.NNDescent(data, metric=self.metric, n_neighbors=self.n_neighbors)
-
         knn = self.index.neighbor_graph[0]
         knn_dist = self.index.neighbor_graph[1]
 
-        cohesion = np.zeros_like(knn_dist)
+        other_knn_uxy_sizes = np.empty_like(knn)
+        for i, j in product(range(knn.shape[0]), range(knn.shape[1])):
+            this = set(knn[i, :])
+            other = set(knn[knn[i,j], :])
+            other_knn_uxy_sizes[i, j] = len(this.union(other))
 
-        for x in tqdm(range(knn.shape[0])):
-            xknn = knn[x]
-            xknn_dist = knn_dist[x]
+        this_dist = np.dstack([knn_dist]*knn.shape[1])
 
-            other_knn = knn[xknn]
-            other_knn_dist = knn_dist[xknn]
+        other_dist = np.empty_like(this_dist)
+        for i in range(knn.shape[0]):
+            other_dist[i, :, :] = knn_dist[knn[i, :], :]
 
-            other_knn_uxy_sizes = np.array([len(np.union1d(xknn, other_knn[i, :])) for i in range(other_knn.shape[0])])
-            for i in range(len(xknn)):
-                dxw = xknn_dist[i]
-                n_further = np.sum(other_knn_dist > dxw, axis=0) + np.sum(other_knn_dist == dxw, axis=0)/2
-                cohesion[x, i] = np.dot(n_further, 1/other_knn_uxy_sizes)
-                
+        n_closer_than = np.sum(this_dist < other_dist, axis=2) + np.sum(this_dist == other_dist, axis=2)
+        cohesion = n_closer_than / other_knn_uxy_sizes
+
         row = np.repeat(range(knn.shape[0]), self.n_neighbors)
         col = knn.flatten()
         data = cohesion.flatten()
@@ -69,13 +68,18 @@ class APALD:
     Returns:
         np.array of cluster assignments, -1 for noise.
     """
-    def predict(self, thresh=None, min_cluster_size=15):
+    def predict(self, thresh=0.5, min_cluster_size=15):
         i,j,weight = scipy.sparse.find(self.palds)
         if thresh=="strong":
             thresh = np.mean(self.palds.diagonal())/2
-            
-        if thresh:
             weight = np.where(weight > thresh, weight, 0)
+        elif thresh:
+            weight = np.where(weight > np.quantile(weight, thresh), weight, 0)
+
+        keep = (weight > 0)
+        i = i[keep]
+        j = j[keep]
+        weight = weight[keep]
 
         self.pald_graph = ig.Graph(n=self.palds.shape[0], edges=list(zip(i, j)))
         self.pald_graph.es["weight"] = weight
