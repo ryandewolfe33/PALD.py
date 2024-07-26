@@ -5,6 +5,7 @@ import igraph as ig
 import leidenalg as la
 
 from itertools import product
+from collections import Counter
 
 """
 The approximate local pald idea
@@ -56,7 +57,7 @@ class APALD:
         col = knn.flatten()
         data = cohesion.flatten()
 
-        cohesion = scipy.sparse.csr_matrix((data, (row, col)))
+        cohesion = scipy.sparse.coo_matrix((data, (row, col)))
         self.palds = cohesion.minimum(cohesion.transpose())
 
         
@@ -68,40 +69,32 @@ class APALD:
     Returns:
         np.array of cluster assignments, -1 for noise.
     """
-    def predict(self, thresh=0.5, min_cluster_size=15):
-        i,j,weight = scipy.sparse.find(self.palds)
+    def predict(self, thresh=0.5, min_cluster_size=15, leiden_method=la.ModularityVertexPartition):
+        sym = self.palds.copy()
         if thresh=="strong":
-            thresh = np.mean(self.palds.diagonal())/2
-            weight = np.where(weight > thresh, weight, 0)
+            thresh = np.mean(sym.diagonal())/2
+            sym.data = np.where(sym.data > thresh, sym.data, 0)
         elif thresh:
-            weight = np.where(weight > np.quantile(weight, thresh), weight, 0)
+            sym.data = np.where(sym.data > np.quantile(sym.data, thresh), sym.data, 0)
+        sym.setdiag(0)
+        sym.eliminate_zeros()
+        self.pald_graph = ig.Graph.Weighted_Adjacency(sym, mode="undirected")
 
-        keep = (weight > 0)
-        i = i[keep]
-        j = j[keep]
-        weight = weight[keep]
+        clusters = la.find_partition(self.pald_graph, leiden_method, weights="weight", n_iterations=5).membership
 
-        self.pald_graph = ig.Graph(n=self.palds.shape[0], edges=list(zip(i, j)))
-        self.pald_graph.es["weight"] = weight
-
-
-        clusters = la.find_partition(self.pald_graph, la.ModularityVertexPartition)
-        self.predict = np.empty(self.palds.shape[0], dtype="int32")
-        current = 0
-        for c in clusters:
-            cn = current
-            if len(c) < min_cluster_size:
-                cn = -1
-            else:
-                current += 1
-            for n in c:
-                self.predict[n] = cn
-        return self.predict
+        if min_cluster_size > 1:
+            cluster_sizes = Counter(clusters)
+            for cluster, size in cluster_sizes.items():
+                if size < min_cluster_size:
+                    clusters[clusters == cluster] = -1
+        
+        self.clusters = clusters
+        return self.clusters
     
 
     """
     Convience Function
     """
-    def fit_predict(self, data, thresh=None, min_cluster_size=15):
+    def fit_predict(self, data, thresh=None, min_cluster_size=15, leiden_method=la.ModularityVertexPartition):
         self.fit(data)
-        return self.predict(thresh=thresh, min_cluster_size=min_cluster_size)
+        return self.predict(thresh=thresh, min_cluster_size=min_cluster_size, leiden_method=leiden_method)
