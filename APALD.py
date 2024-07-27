@@ -1,11 +1,29 @@
 import scipy.sparse
 import numpy as np
 import pynndescent
-import igraph as ig
-import leidenalg as la
+import sknetwork.clustering
+from numba import jit
 
-from itertools import product
-from collections import Counter
+
+@jit
+def size_of_union(a, b):
+    return len(a) + len(b) - len(np.intersect1d(a, b))
+
+
+@jit(nopython=True)
+def make_other_knn_uxy_sizes(knn):
+    other_sizes = np.empty_like(knn)
+    cache = dict()
+    for i in range(knn.shape[0]):
+        for j in range(knn.shape[1]):
+            if (i,j) in cache:
+                other_sizes[i, j] = cache[(i,j)]
+            else:
+                size = size_of_union(knn[i, :], knn[knn[i,j], :])
+                other_sizes[i, j] = size
+                cache[(j, i)] = size
+    return other_sizes
+
 
 """
 The approximate local pald idea
@@ -38,14 +56,8 @@ class APALD:
         knn = self.index.neighbor_graph[0]
         knn_dist = self.index.neighbor_graph[1]
 
-        other_knn_uxy_sizes = np.empty_like(knn)
-        for i, j in product(range(knn.shape[0]), range(knn.shape[1])):
-            this = set(knn[i, :])
-            other = set(knn[knn[i,j], :])
-            other_knn_uxy_sizes[i, j] = len(this.union(other))
-
+        other_knn_uxy_sizes = make_other_knn_uxy_sizes(knn)
         this_dist = np.dstack([knn_dist]*knn.shape[1])
-
         other_dist = np.empty_like(this_dist)
         for i in range(knn.shape[0]):
             other_dist[i, :, :] = knn_dist[knn[i, :], :]
@@ -53,7 +65,7 @@ class APALD:
         n_closer_than = np.sum(this_dist < other_dist, axis=2) + np.sum(this_dist == other_dist, axis=2)
         cohesion = n_closer_than / other_knn_uxy_sizes
 
-        row = np.repeat(range(knn.shape[0]), self.n_neighbors)
+        row = np.repeat(np.arange(knn.shape[0]), knn.shape[1])
         col = knn.flatten()
         data = cohesion.flatten()
 
@@ -69,7 +81,7 @@ class APALD:
     Returns:
         np.array of cluster assignments, -1 for noise.
     """
-    def predict(self, thresh=0.5, min_cluster_size=15, leiden_method=la.ModularityVertexPartition):
+    def predict(self, thresh=0.5, min_cluster_size=15,):
         sym = self.palds.copy()
         if thresh=="strong":
             thresh = np.mean(sym.diagonal())/2
@@ -78,23 +90,16 @@ class APALD:
             sym.data = np.where(sym.data > np.quantile(sym.data, thresh), sym.data, 0)
         sym.setdiag(0)
         sym.eliminate_zeros()
-        self.pald_graph = ig.Graph.Weighted_Adjacency(sym, mode="undirected")
-
-        clusters = la.find_partition(self.pald_graph, leiden_method, weights="weight", n_iterations=5).membership
-
-        if min_cluster_size > 1:
-            cluster_sizes = Counter(clusters)
-            for cluster, size in cluster_sizes.items():
-                if size < min_cluster_size:
-                    clusters[clusters == cluster] = -1
         
-        self.clusters = clusters
+        self.leiden = sknetwork.clustering.Leiden(n_aggregations=3)
+        self.clusters = self.leiden.fit_predict(sym)
+
         return self.clusters
     
 
     """
     Convience Function
     """
-    def fit_predict(self, data, thresh=None, min_cluster_size=15, leiden_method=la.ModularityVertexPartition):
+    def fit_predict(self, data, thresh=None, min_cluster_size=15):
         self.fit(data)
-        return self.predict(thresh=thresh, min_cluster_size=min_cluster_size, leiden_method=leiden_method)
+        return self.predict(thresh=thresh, min_cluster_size=min_cluster_size)
