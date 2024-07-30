@@ -2,6 +2,8 @@ import scipy.sparse
 import numpy as np
 import pynndescent
 import sknetwork.clustering
+import leidenalg as la
+import igraph as ig
 from numba import jit
 
 
@@ -10,7 +12,7 @@ def size_of_union(a, b):
     return len(a) + len(b) - len(np.intersect1d(a, b))
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # Already optimial parralized
 def make_other_knn_uxy_sizes(knn):
     other_sizes = np.empty_like(knn)
     cache = dict()
@@ -23,6 +25,20 @@ def make_other_knn_uxy_sizes(knn):
                 other_sizes[i, j] = size
                 cache[(j, i)] = size
     return other_sizes
+
+
+@jit(nopython=True, parallel=True)
+def make_n_closer_than(knn, knn_dist):
+    this_dist = np.empty((knn.shape[0], knn.shape[1], knn.shape[1]), dtype=knn_dist.dtype)
+    for i in range(knn.shape[1]):
+        this_dist[:, :, i] = knn_dist
+
+    other_dist = np.empty_like(this_dist)
+    for i in range(knn.shape[0]):
+        other_dist[i, :, :] = knn_dist[knn[i, :], :]
+    
+    n_closer_than = np.sum(this_dist < other_dist, axis=2) + np.sum(this_dist == other_dist, axis=2)
+    return n_closer_than
 
 
 """
@@ -57,12 +73,7 @@ class APALD:
         knn_dist = self.index.neighbor_graph[1]
 
         other_knn_uxy_sizes = make_other_knn_uxy_sizes(knn)
-        this_dist = np.dstack([knn_dist]*knn.shape[1])
-        other_dist = np.empty_like(this_dist)
-        for i in range(knn.shape[0]):
-            other_dist[i, :, :] = knn_dist[knn[i, :], :]
-
-        n_closer_than = np.sum(this_dist < other_dist, axis=2) + np.sum(this_dist == other_dist, axis=2)
+        n_closer_than = make_n_closer_than(knn, knn_dist)
         cohesion = n_closer_than / other_knn_uxy_sizes
 
         row = np.repeat(np.arange(knn.shape[0]), knn.shape[1])
