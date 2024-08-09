@@ -9,6 +9,7 @@ from sklearn.utils import check_array
 
 import warnings
 
+
 @jit
 def size_of_union(a, b):
     return len(a) + len(b) - len(np.intersect1d(a, b))
@@ -20,10 +21,10 @@ def make_other_knn_uxy_sizes(knn):
     cache = dict()
     for i in range(knn.shape[0]):
         for j in range(knn.shape[1]):
-            if (i,j) in cache:
-                other_sizes[i, j] = cache[(i,j)]
+            if (i, j) in cache:
+                other_sizes[i, j] = cache[(i, j)]
             else:
-                size = size_of_union(knn[i, :], knn[knn[i,j], :])
+                size = size_of_union(knn[i, :], knn[knn[i, j], :])
                 other_sizes[i, j] = size
                 cache[(j, i)] = size
     return other_sizes
@@ -31,15 +32,19 @@ def make_other_knn_uxy_sizes(knn):
 
 @jit(nopython=True, parallel=True)
 def make_n_closer_than(knn, knn_dist):
-    this_dist = np.empty((knn.shape[0], knn.shape[1], knn.shape[1]), dtype=knn_dist.dtype)
+    this_dist = np.empty(
+        (knn.shape[0], knn.shape[1], knn.shape[1]), dtype=knn_dist.dtype
+    )
     for i in range(knn.shape[1]):
         this_dist[:, :, i] = knn_dist
 
     other_dist = np.empty_like(this_dist)
     for i in range(knn.shape[0]):
         other_dist[i, :, :] = knn_dist[knn[i, :], :]
-    
-    n_closer_than = np.sum(this_dist < other_dist, axis=2) + np.sum(this_dist == other_dist, axis=2)
+
+    n_closer_than = np.sum(this_dist < other_dist, axis=2) + np.sum(
+        this_dist == other_dist, axis=2
+    )
     return n_closer_than
 
 
@@ -49,8 +54,8 @@ class PAKNNLD(ClusterMixin, BaseEstimator):
     clustering is primarily a local problem, and uses on K nearest neighbors to compute cohesion
     values. Significantly faster than PALD, something like O(k^2 * n * log n) and suitable for hundreds
     thousands of points. Uses the Leiden clustering algorithm with modularity to cluster the cohesion
-    graph (different than either paper). 
-    
+    graph (different than either paper).
+
     Extension of the paper "A social perspective
     on perceived distances reveals deep community structure" by Kenneth Berenhaut, Katherine
     Moorea, and Ryan Melvin,
@@ -61,9 +66,9 @@ class PAKNNLD(ClusterMixin, BaseEstimator):
 
     Parameters
     ----------
-    
+
     n_neighbors : int, default=100
-    
+
     metric : string, default="cosine"
              Passed to pynndescent metric so a wide range of options are supported.
 
@@ -84,11 +89,11 @@ class PAKNNLD(ClusterMixin, BaseEstimator):
         A matrix of the cohesion value C[x, w]. This matrix is not symmetric.
         Can be thought of a complete weighted directed graph on n_samples vertices.
     """
+
     def __init__(self, n_neighbors=100, metric="cosine", thresh=0.5):
-        self.n_neighbors=n_neighbors
-        self.metric=metric
+        self.n_neighbors = n_neighbors
+        self.metric = metric
         self.thresh = thresh
-    
 
     def fit(self, X, y=None):
         """
@@ -98,7 +103,7 @@ class PAKNNLD(ClusterMixin, BaseEstimator):
         ----------
 
         X : array-like of shape (n_samples, n_features)
-            The data to cluster. 
+            The data to cluster.
 
         y : array-like of shape (n_samples,), default=None
             Ignored. This parameter exists only for compatibility with
@@ -114,9 +119,11 @@ class PAKNNLD(ClusterMixin, BaseEstimator):
         X = check_array(X)
         n_neighbors = self.n_neighbors
         if n_neighbors > X.shape[0]:
-            warnings.warn("Asked for more neighbors that data points, defaulting to n_neighbors = n points.")
+            warnings.warn(
+                "Asked for more neighbors that data points, defaulting to n_neighbors = n points."
+            )
             n_neighbors = X.shape[0]
-        
+
         index = pynndescent.NNDescent(X, metric=self.metric, n_neighbors=n_neighbors)
         knn = index.neighbor_graph[0]
         knn_dist = index.neighbor_graph[1]
@@ -131,11 +138,18 @@ class PAKNNLD(ClusterMixin, BaseEstimator):
         self.cohesion_ = scipy.sparse.coo_matrix((data, (row, col)))
 
         symmetric_cohesion = self.cohesion_.minimum(self.cohesion_.transpose())
-        if self.thresh=="strong":
-            thresh = np.mean(symmetric_cohesion.diagonal())/2
-            symmetric_cohesion.data = np.where(symmetric_cohesion.data > thresh, symmetric_cohesion.data, 0)
+        if self.thresh == "strong":
+            thresh = np.mean(symmetric_cohesion.diagonal()) / 2
+            symmetric_cohesion.data = np.where(
+                symmetric_cohesion.data > thresh, symmetric_cohesion.data, 0
+            )
         elif self.thresh:
-            symmetric_cohesion.data = np.where(symmetric_cohesion.data > np.quantile(symmetric_cohesion.data, self.thresh), symmetric_cohesion.data, 0)
+            symmetric_cohesion.data = np.where(
+                symmetric_cohesion.data
+                > np.quantile(symmetric_cohesion.data, self.thresh),
+                symmetric_cohesion.data,
+                0,
+            )
         symmetric_cohesion.setdiag(0)
         symmetric_cohesion.eliminate_zeros()
 

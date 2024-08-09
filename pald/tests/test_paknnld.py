@@ -5,19 +5,22 @@ from sklearn.utils.estimator_checks import check_estimator
 
 from pald import PAKNNLD
 
+
 @pytest.fixture
 def data():
     # Data is copied from exdata1 in R package
-    X = np.array([
-        [-2.0,0.0],
-        [-1.0,1.28],
-        [-1.0,-1.28],
-        [0.0,0.0],
-        [1.4,-0.9],
-        [1.4,0.0],
-        [1.4,0.9],
-        [0.5,3.0],
-    ])
+    X = np.array(
+        [
+            [-2.0, 0.0],
+            [-1.0, 1.28],
+            [-1.0, -1.28],
+            [0.0, 0.0],
+            [1.4, -0.9],
+            [1.4, 0.0],
+            [1.4, 0.9],
+            [0.5, 3.0],
+        ]
+    )
     yield X
 
 
