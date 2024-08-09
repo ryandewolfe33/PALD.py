@@ -1,12 +1,33 @@
 # PALD.py
 
-This is a pure python implementation of the PALD clustering algorithm presented in *A social perspective on perceived distances reveals deep community structure*. The official implemnetation is an R package available at https://github.com/moorekatherine/pald.
+This is a pure python implementation of two clustering algorithms based off *A social perspective on perceived distances reveals deep community structure*. 
 
-# APALD.py
+The PALD algorithm is directly from the paper. The official implemnetation is an R package available at https://github.com/moorekatherine/pald. It is a comparison based approach so scales well to higher dimensions. However it has a runtime of O(n^3) and a space complexity of O(n^2) so is only useful up to
+thousands of points.
 
-This is a custom work in progress on Approximate PArtitioned Local Depth for clustering. It's showing some promise.  
+The PAKNNLD algorithm is an attempt to efficiently capture the PALD idea. Using on the K nearest neighbors, the runtime is probably P(n * log n) and can be used on hundreds of thousands of data points.
+The idea was mentioned in  *Partitioned K-nearest neighbor local depth for scalable comparison-based learning* but not thoroughly explored.
 
-## WARNING
+Both algorithms are implemented according to the sklearn api so can be used in conjunction with other sklearn classes.
+
+## Getting Started
+For now the package must be cloned and locally installed.
+```bash
+git clone git@github.com:ryandewolfe33/PALD.py.git
+cd PALD.py
+pip install .
+```
+
+## Example Usage
+```python
+import sklearn.datasets as data
+import pald
+moons, _ = data.make_moons(n_samples=50, noise=0.05, random_state=123)
+pald_labels = pald.PALD().fit_predict(data)
+paknnld_labels = pald.PAKNNLD().fit_predict(data)
+```
+
+## Some dataset information
 This is by no means an efficient implementation, and the algrothim runs in O(n^3) with the number of points. Usage is not recomended for more than a few hundred points.
 
 Test data was taken from https://github.com/moorekatherine/pald/tree/main/data and converted to csv files (after dropping headers) using https://github.com/vnmabus/rdata. 
@@ -19,23 +40,3 @@ A. Gionis, H. Mannila, and P. Tsaparas, Clustering aggregation. ACM Transactions
 Included in "cognate.txt"
 I. Dyen, J. B. Kruskal, P. Black, An Indoeuropean classification: A lexicostatistical experiment.  Trans. Am. Phil. Soc.82, iii-132 (1992)
 Downloaded from: https://github.com/moorekatherine/pald-communities
-
-
-project-template - A template for scikit-learn contributions
-============================================================
-
-![tests](https://github.com/scikit-learn-contrib/project-template/actions/workflows/python-app.yml/badge.svg)
-[![codecov](https://codecov.io/gh/scikit-learn-contrib/project-template/graph/badge.svg?token=L0XPWwoPLw)](https://codecov.io/gh/scikit-learn-contrib/project-template)
-![doc](https://github.com/scikit-learn-contrib/project-template/actions/workflows/deploy-gh-pages.yml/badge.svg)
-
-**project-template** is a template project for [scikit-learn](https://scikit-learn.org)
-compatible extensions.
-
-It aids development of estimators that can be used in scikit-learn pipelines and
-(hyper)parameter search, while facilitating testing (including some API compliance),
-documentation, open source development, packaging, and continuous integration.
-
-Refer to the documentation to modify the template for your own scikit-learn
-contribution: https://contrib.scikit-learn.org/project-template
-
-*Thank you for cleanly contributing to the scikit-learn ecosystem!*
