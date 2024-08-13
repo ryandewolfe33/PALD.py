@@ -1,11 +1,11 @@
 # PALD.py
 
-This is a pure python implementation of two clustering algorithms based off *A social perspective on perceived distances reveals deep community structure*. 
+This is a pure python implementation of two clustering algorithms based off the paper *A social perspective on perceived distances reveals deep community structure*. 
 
 The PALD algorithm is directly from the paper. The official implemnetation is an R package available at https://github.com/moorekatherine/pald. It is a comparison based approach so scales well to higher dimensions. However it has a runtime of O(n^3) and a space complexity of O(n^2) so is only useful up to
 thousands of points.
 
-The PAKNNLD algorithm is an attempt to efficiently capture the PALD idea. Using on the K nearest neighbors, the runtime is probably P(n * log n) and can be used on hundreds of thousands of data points.
+The PAKNNLD algorithm is an attempt to efficiently capture the PALD idea. Using only the K nearest neighbors, the runtime is probably O(n * log n) and can be used on hundreds of thousands of vectors.
 The idea was mentioned in  *Partitioned K-nearest neighbor local depth for scalable comparison-based learning* but not thoroughly explored.
 
 Both algorithms are implemented according to the sklearn api so can be used in conjunction with other sklearn classes.
@@ -36,7 +36,6 @@ Aggregation.txt data is a Benchmark data set Aggregation consisting of n = 788 p
 Link to data: http://cs.joensuu.fi/sipu/datasets/Aggregation.txt
 A. Gionis, H. Mannila, and P. Tsaparas, Clustering aggregation. ACM Transactions on Knowledge Discovery from Data (TKDD), 2007. 1(1): p. 1-30.
 
+HDBSCAN comparison clusterable data is taken from the HDBSCAN repository. https://github.com/scikit-learn-contrib/hdbscan
 
-Included in "cognate.txt"
-I. Dyen, J. B. Kruskal, P. Black, An Indoeuropean classification: A lexicostatistical experiment.  Trans. Am. Phil. Soc.82, iii-132 (1992)
-Downloaded from: https://github.com/moorekatherine/pald-communities
+Several openml datasets are used for comparison with EVoC.
