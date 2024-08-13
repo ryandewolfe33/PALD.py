@@ -28,8 +28,6 @@ paknnld_labels = pald.PAKNNLD().fit_predict(data)
 ```
 
 ## Some dataset information
-This is by no means an efficient implementation, and the algrothim runs in O(n^3) with the number of points. Usage is not recomended for more than a few hundred points.
-
 Test data was taken from https://github.com/moorekatherine/pald/tree/main/data and converted to csv files (after dropping headers) using https://github.com/vnmabus/rdata. 
 
 Aggregation.txt data is a Benchmark data set Aggregation consisting of n = 788 points.
