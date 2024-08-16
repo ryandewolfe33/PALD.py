@@ -6,7 +6,7 @@ The PALD algorithm is directly from the paper. The official implemnetation is an
 thousands of points.
 
 The PAKNNLD algorithm is an attempt to efficiently capture the PALD idea. Using only the K nearest neighbors, the runtime is probably O(n * log n) and can be used on hundreds of thousands of vectors.
-The idea was mentioned in  *Partitioned K-nearest neighbor local depth for scalable comparison-based learning* but not thoroughly explored.
+The idea was mentioned in  *Partitioned K-nearest neighbor local depth for scalable comparison-based learning* but not thoroughly explored. A high level overview of the algorithm can be found in [this notebook](/notebooks/how_paknnld_works.ipynb)
 
 Both algorithms are implemented according to the sklearn api so can be used in conjunction with other sklearn classes.
 
